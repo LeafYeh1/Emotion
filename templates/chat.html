@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>聊天紀錄</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #e8f1fc;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .chat-app {
+      width: 900px;
+      height: 600px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      display: flex;
+      overflow: hidden;
+    }
+    /* 左側日期清單 */
+    .chat-list {
+      width: 250px;
+      border-right: 1px solid #ddd;
+      display: flex;
+      flex-direction: column;
+      background: #fafafa;
+    }
+    .chat-list-header {
+      background: #4a76a8;
+      color: #fff;
+      padding: 15px;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    .chat-item {
+      padding: 15px;
+      border-bottom: 1px solid #eee;
+      cursor: pointer;
+    }
+    .chat-item:hover {
+      background: #eaeaea;
+    }
+    .chat-item.active {
+      background: #dbe7f4;
+    }
+    /* 右側聊天內容 */
+    .chat-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .chat-header {
+      background: #4a76a8;
+      color: #fff;
+      padding: 15px;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    .chat-messages {
+      flex: 1;
+      padding: 15px;
+      overflow-y: auto;
+    }
+    .message {
+      margin: 8px 0;
+      padding: 10px 14px;
+      border-radius: 12px;
+      max-width: 70%;
+      word-wrap: break-word;
+      clear: both;
+    }
+    .message.user {
+      background: #96d7e9;
+      align-self: flex-end;
+      margin-left: auto;
+    }
+    .message.ai {
+      background: #ffe6b3;
+      align-self: flex-start;
+    }
+    .timestamp {
+      display: block;
+      font-size: 12px;
+      color: #666;
+      margin-top: 4px;
+      text-align: right;
+    }
+    .chat-input {
+      display: flex;
+      border-top: 1px solid #ddd;
+    }
+    .chat-input input {
+      flex: 1;
+      border: none;
+      padding: 15px;
+      font-size: 16px;
+      outline: none;
+    }
+    .chat-input button {
+      background: #4a76a8;
+      color: #fff;
+      border: none;
+      padding: 0 20px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .chat-input button:hover {
+      background: #3b5f85;
+    }
+    .delete-date-btn {
+    cursor: pointer;
+    color: red;
+    font-size: 14px;
+    margin-left: 8px;
+  }
+  </style>
+</head>
+<body>
+  <div class="chat-app">
+    <!-- 左側日期紀錄 -->
+    <div class="chat-list">
+      <div class="chat-list-header">紀錄日期</div>
+      <div id="dateList"></div>
+    </div>
+
+    <!-- 右側聊天內容 -->
+    <div class="chat-container">
+      <div class="chat-header" id="chatHeader">尚未選擇日期</div>
+      <div class="chat-messages" id="chatMessages"></div>
+      <div class="chat-input">
+        <input type="text" id="chatInput" placeholder="輸入訊息...">
+        <button onclick="sendMessage()">送出</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const chatMessages = document.getElementById("chatMessages");
+    const chatInput = document.getElementById("chatInput");
+    const chatHeader = document.getElementById("chatHeader");
+    const dateList = document.getElementById("dateList");
+
+    // 紀錄物件：日期 → 訊息陣列
+    const records = {};
+    let currentDate = null;
+
+    function getTodayDate() {
+      const today = new Date();
+      return today.toISOString().split("T")[0]; // YYYY-MM-DD
+    }
+
+    function getCurrentTime() {
+      const now = new Date();
+      return now.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" });
+    }
+
+    function switchChat(date) {
+      currentDate = date;
+      chatHeader.innerText = date;
+
+      // 更新 active 樣式
+      document.querySelectorAll(".chat-item").forEach(item => item.classList.remove("active"));
+      const selected = document.querySelector(`.chat-item[data-date="${date}"]`);
+      if (selected) selected.classList.add("active");
+
+      // 向後端撈取該日期紀錄
+      fetch(`/chat_history?date=${date}`)
+        .then(res => res.json())
+        .then(data => {
+          records[date] = data.history || [];
+          renderMessages();
+        });
+    }
+
+    function sendMessage() {
+      const text = chatInput.value.trim();
+      if (text === "") return;
+
+      // 如果還沒選日期，自動用今天日期
+      if (!currentDate) {
+        currentDate = getTodayDate();
+
+        // 如果今天日期不存在於左側，新增
+        if (!records[currentDate]) {
+          records[currentDate] = [];
+          addDateToList(currentDate);
+        }
+        switchChat(currentDate);
+      }
+
+      // 新增使用者訊息
+      if (!records[currentDate]) {
+        records[currentDate] = [];
+      }
+      records[currentDate].push({ text, sender: "user", time: getCurrentTime() });
+
+      chatInput.value = "";
+      renderMessages();
+
+      // 呼叫後端 AI 回覆
+      fetch("/chat_ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: text,
+          history: records[currentDate],  // 傳送當天所有訊息
+          date: currentDate
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.reply) {
+          records[currentDate].push({ text: data.reply, sender: "ai", time: getCurrentTime() });
+          renderMessages();
+        }
+      });
+    }
+
+    function renderMessages() {
+      chatMessages.innerHTML = "";
+      if (records[currentDate]) {
+        records[currentDate].forEach(msg => {
+          const msgDiv = document.createElement("div");
+          msgDiv.classList.add("message", msg.sender);
+          msgDiv.innerHTML = `
+            <div>${msg.text}</div>
+            <span class="timestamp">${msg.time}</span>
+          `;
+          chatMessages.appendChild(msgDiv);
+        });
+      } else {
+        chatMessages.innerHTML = "<p>尚無紀錄</p>";
+      }
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function addDateToList(date) {
+    const item = document.createElement("div");
+    item.classList.add("chat-item");
+    item.setAttribute("data-date", date);
+
+    // 日期文字
+    const dateText = document.createElement("span");
+    dateText.innerText = date;
+    dateText.style.flex = "1";
+    dateText.onclick = () => switchChat(date);
+
+    // 刪除按鈕
+    const deleteBtn = document.createElement("span");
+    deleteBtn.innerText = "✕";
+    deleteBtn.classList.add("delete-date-btn");
+    deleteBtn.onclick = (e) => {
+      e.stopPropagation();
+      if (confirm(`確定要刪除 ${date} 的聊天紀錄嗎？`)) {
+        // 呼叫後端刪除 API
+        fetch("/delete_chat_date", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ date })
+        })
+        .then(res => res.json())
+        .then(result => {
+          if (result.success) {
+            delete records[date];
+            item.remove();
+            if (currentDate === date) {
+              currentDate = null;
+              chatHeader.innerText = "尚未選擇日期";
+              chatMessages.innerHTML = "<p>尚無紀錄</p>";
+            }
+          } else {
+            alert("刪除失敗：" + (result.error || ""));
+          }
+        });
+      }
+    };
+
+    // 包裝
+    item.style.display = "flex";
+    item.style.justifyContent = "space-between";
+    item.style.alignItems = "center";
+
+    item.appendChild(dateText);
+    item.appendChild(deleteBtn);
+    dateList.appendChild(item);
+    }
+
+
+    // Enter 鍵送出
+    chatInput.addEventListener("keydown", e => {
+      if (e.key === "Enter") {
+        sendMessage();
+      }
+    });
+
+    // 一載入就撈所有有紀錄的日期
+    fetch("/chat_dates")
+      .then(res => res.json())
+      .then(data => {
+        data.dates.forEach(addDateToList);
+      });
+      
+  </script>
+</body>
+</html>

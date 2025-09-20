@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>註冊帳號</title>
+    <style>
+        body {
+            background-color: #e6f0ff;
+            font-family: 'Helvetica Neue', sans-serif;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.1);
+            width: 400px;
+        }
+        h2 {
+            color: #3366cc;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        input[type="text"], input[type="password"], input[type="email"] {
+            width: 100%;
+            padding: 12px;
+            margin: 6px 0;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #3366cc;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #295bb1;
+        }
+        a {
+            color: #3366cc;
+        }
+        .messages {
+            margin-top: 10px;
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>註冊{{ '諮商師' if role == 'counselor' else '使用者' }}帳號</h2>
+        <form method="POST">
+            <input type="text" name="account" placeholder="帳號" required><br>
+            <input type="email" name="email" placeholder="電子郵件" required><br>
+            
+            <input type="password" name="password" placeholder="密碼（至少8位，含英文大小寫+數字）"
+                pattern="(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{8,}" 
+                title="至少8位，包含大小寫字母與數字" required><br>
+                
+            <input type="password" name="confirm_password" placeholder="確認密碼" required><br>
+
+            <!-- 只有諮商師才需要填寫 clinic -->
+            {% if role == 'counselor' %}
+            <input type="text" name="clinic" placeholder="隸屬哪家診所或醫院" required><br>
+            {% endif %}
+            
+            <input type="hidden" name="role" value="{{ role }}">
+            <button type="submit">註冊</button>
+        </form>
+        <p>已經有帳號了？<a href="{{ '/login_counselor' if role == 'counselor' else '/login_user' }}">登入</a></p>
+
+        <!--會有暫時性的提示訊息-->
+        <div class="messages">
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    <ul>
+                    {% for msg in messages %}
+                        <li>{{ msg }}</li>
+                    {% endfor %}
+                    </ul>
+                {% endif %}
+            {% endwith %}
+        </div>
+    </div>
+</body>
+</html>
